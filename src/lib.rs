@@ -13,6 +13,7 @@ pub use vga_driver::Color;
 pub mod serial;
 pub mod vga_driver;
 pub mod interrupts;
+pub mod gdt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
@@ -65,6 +66,7 @@ pub fn colorchg(foreground_color: Color, background_color: Color){
 }
 
 pub fn init() {
+    gdt::init();
     interrupts::init_idt();
 }
 

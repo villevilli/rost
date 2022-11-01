@@ -22,3 +22,7 @@ test-args = [
     "stdio", "-display", "none"
 ]
 test-success-exit-code = 33
+
+[[test]]
+name = "stack_overflow"
+harness = false

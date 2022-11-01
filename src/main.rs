@@ -36,10 +36,14 @@ pub extern "C" fn _start() -> ! {
 
     }
 
-    x86_64::instructions::interrupts::int3();
-
     #[cfg(test)]
     test_main();
+
+    fn stack_overflow() {
+        stack_overflow();
+    }
+
+    stack_overflow();
 
     println!("it didnt crash!!");
     loop {}

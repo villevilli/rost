@@ -15,7 +15,7 @@ fn panic(_info: &PanicInfo) -> ! {
     
     colorchg(White, LightRed);
     println!("{}", _info);
-    loop {}
+    rost::hlt_loop()
 }
 
 #[cfg(test)]
@@ -39,14 +39,10 @@ pub extern "C" fn _start() -> ! {
     #[cfg(test)]
     test_main();
 
-    fn stack_overflow() {
-        stack_overflow();
-    }
+    colorchg(Green, Black);
+    println!("Didnt crashus");
 
-    stack_overflow();
-
-    println!("it didnt crash!!");
-    loop {}
+    rost::hlt_loop();
 }
 
 #[test_case]

@@ -14,6 +14,7 @@ pub mod serial;
 pub mod vga_driver;
 pub mod interrupts;
 pub mod gdt;
+pub mod pc_speaker;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]

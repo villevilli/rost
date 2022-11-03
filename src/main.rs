@@ -8,6 +8,7 @@ use core::panic::PanicInfo;
 use rost::println;
 use rost::colorchg;
 use rost::Color::*;
+use rost::interrupts::TICKS;
 
 #[cfg(not(test))]
 #[panic_handler]
@@ -41,6 +42,8 @@ pub extern "C" fn _start() -> ! {
 
     colorchg(Green, Black);
     println!("Didnt crashus");
+
+    rost::pc_speaker::play_sound(1000);
 
     rost::hlt_loop();
 }

@@ -1,7 +1,5 @@
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
-use crate::println;
-use crate::print;
-use crate::gdt;
+use crate::{println, print, gdt};
 use lazy_static::lazy_static;
 use pic8259::ChainedPics;
 use spin;
@@ -25,6 +23,10 @@ impl InterruptIndex {
     fn as_usize(self) -> usize {
         usize::from(self.as_u8())
     }
+}
+
+lazy_static!{
+    pub static ref TICKS: spin::RwLock<u64> = spin::RwLock::new(0);
 }
 
 
@@ -64,8 +66,14 @@ extern "x86-interrupt" fn breakpoint_handler(
 
 extern "x86-interrupt" fn timer_interrupt_handler(
     _stack_frame: InterruptStackFrame)
-{
-    //print!(".");
+    {
+    match TICKS.try_write(){
+        None=> (),
+        Some(mut ticks) => {
+            *ticks += 1;
+        }
+    }    
+
     unsafe {
         PICS.lock()
             .notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
@@ -78,6 +86,7 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(
     use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
     use spin::Mutex;
     use x86_64::instructions::port::Port;
+    use crate::vga_driver::{change_screen_color, Color};
 
     lazy_static! {
         static ref KEYBOARD: Mutex<Keyboard<layouts::Us104Key, ScancodeSet1>> =
@@ -89,6 +98,8 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(
     let mut keyboard = KEYBOARD.lock();
     let mut port = Port::new(0x60);
 
+    change_screen_color(Color::Green, Color::Blue);
+
     let scancode: u8 = unsafe { port.read() };
     if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
         if let Some(key) = keyboard.process_keyevent(key_event) {
@@ -98,6 +109,8 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(
             }
         }
     }
+
+    
 
     unsafe {
         PICS.lock()

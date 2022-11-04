@@ -9,11 +9,12 @@ use rost::println;
 use rost::colorchg;
 use rost::Color::*;
 use rost::interrupts::TICKS;
+use rost::vga_driver;
 
 #[cfg(not(test))]
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
-    
+    x86_64::instructions::interrupts::disable();
     colorchg(White, LightRed);
     println!("{}", _info);
     rost::hlt_loop()
@@ -43,7 +44,14 @@ pub extern "C" fn _start() -> ! {
     colorchg(Green, Black);
     println!("Didnt crashus");
 
+    /*vga_driver::Writer::set_cursor_pos( vga_driver::CursorPosition{
+        x: 12,
+        y:6
+    });*/
+
     rost::pc_speaker::play_sound(1000);
+
+    panic!("testpanic");
 
     rost::hlt_loop();
 }

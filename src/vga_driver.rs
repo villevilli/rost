@@ -127,7 +127,6 @@ pub struct Writer {
 //let mut crtc_address_register = Port::new(0x3D4);
 //let mut crtc_data_register = Port::new(0x3D5);
 
-#[allow(dead_code)]
 impl Writer {
     pub fn write_byte(&mut self, byte: u8) {
         match byte {
@@ -186,19 +185,41 @@ impl Writer {
 
         let [high, low] = pos.to_be_bytes();
 
+        self.while_saving_old_crtc_address(||{
+            unsafe{
+                self.registers.crtc_address.write(0x0E as u8);
+                self.registers.crtc_data.write(high);
+    
+                self.registers.crtc_address.write(0x0F as u8);
+                self.registers.crtc_data.write(low);
+            }
+        });
+    }
+
+    /// Runs a closure while saving the old crtc addres
+    /// 
+    /// # Examples
+    /// ```ignore
+    /// while_saving_old_crtc_address(|| {
+    ///     //do thing here
+    /// })
+    /// ```
+    /// ## Safety
+    /// The function is safe, as long as the vga card is not driven in color mode, in which case you have bigger problems.
+    fn while_saving_old_crtc_address<F, R>(&mut self,f: F) -> R
+    where
+        F: FnOnce() -> R,
+    {
+        let _old_address: u8;
         unsafe{
-            let old_address = self.registers.crtc_address.read();
-
-            self.registers.crtc_address.write(0x0E as u8);
-            self.registers.crtc_data.write(high);
-
-            self.registers.crtc_address.write(0x0F as u8);
-            self.registers.crtc_data.write(low);
-
-            self.registers.crtc_address.write(old_address);
+            _old_address = self.registers.crtc_address.read();
         }
 
-        println!("here");
+        let ret = f();
+        /*unsafe{
+            self.registers.crtc_address.write(_old_address);
+        }*/
+        ret
     }
 
     pub fn get_cursor_position(&mut self) -> CursorPosition{

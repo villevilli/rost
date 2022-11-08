@@ -1,5 +1,5 @@
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
-use crate::{println, print, gdt};
+use crate::{println, print, gdt, vga_driver};
 use lazy_static::lazy_static;
 use pic8259::ChainedPics;
 use spin;
@@ -83,7 +83,7 @@ extern "x86-interrupt" fn timer_interrupt_handler(
 extern "x86-interrupt" fn keyboard_interrupt_handler(
     _stack_frame: InterruptStackFrame)
 {
-    use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
+    use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1, KeyCode};
     use spin::Mutex;
     use x86_64::instructions::port::Port;
     use crate::vga_driver::{change_screen_color, Color};
@@ -100,12 +100,35 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(
 
     change_screen_color(Color::Green, Color::Blue);
 
+/*
+                    KeyCode::ArrowLeft => {
+                    
+                    },
+                    KeyCode::ArrowRight => {},
+                    KeyCode::ArrowUp => {},
+                    KeyCode::ArrowDown => {},
+*/
+
     let scancode: u8 = unsafe { port.read() };
     if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
         if let Some(key) = keyboard.process_keyevent(key_event) {
             match key {
                 DecodedKey::Unicode(character) => print!("{}", character),
-                DecodedKey::RawKey(key) => print!("{:?}", key),
+                DecodedKey::RawKey(key) => match key {
+                    KeyCode::ArrowLeft => {
+                        vga_driver::move_cursor_by(-1, 0);
+                    },
+                    KeyCode::ArrowRight => {
+                        vga_driver::move_cursor_by(1, 0);
+                    },
+                    KeyCode::ArrowUp => {
+                        vga_driver::move_cursor_by(0, -1);
+                    },
+                    KeyCode::ArrowDown => {
+                        vga_driver::move_cursor_by(0, 1);
+                    },
+                    _ => {},
+                },
             }
         }
     }

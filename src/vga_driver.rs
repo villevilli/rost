@@ -1,10 +1,3 @@
-<<<<<<< HEAD
-=======
-
-
-use volatile::Volatile;
-use spin::Mutex;
->>>>>>> 13438ad32109392c82e6864ec83d6dd4ed04e943
 use lazy_static::lazy_static;
 use spin::Mutex;
 use volatile::Volatile;
@@ -56,15 +49,11 @@ pub fn change_screen_color(foreground_color: Color, background_color: Color) {
     });
 }
 
-<<<<<<< HEAD
-pub struct CursorPosition {
-=======
-pub fn move_cursor_by(x: i8, y: i8){
+pub fn move_cursor_by(x: i8, y: i8) {
     WRITER.lock().move_cursor_by(x, y)
 }
 
-pub struct CursorPosition{
->>>>>>> 13438ad32109392c82e6864ec83d6dd4ed04e943
+pub struct CursorPosition {
     x: u8,
     y: u8,
 }
@@ -199,28 +188,27 @@ impl Writer {
         }
     }
 
-<<<<<<< HEAD
-    fn write_stuff(&mut self, address: u8, value: u8) {
+    fn crtc_write(&mut self, address: u8, value: u8) {
         without_interrupts(move || unsafe {
             self.registers.crtc_address.write(address);
             self.registers.crtc_data.write(value);
         });
-=======
+    }
 
-    pub fn move_cursor_by(&mut self, x: i8, y: i8){
-        let mut cursor_pos =  self.get_cursor_position();
+    pub fn move_cursor_by(&mut self, x: i8, y: i8) {
+        let mut cursor_pos = self.get_cursor_position();
         cursor_pos.x = cursor_pos.x.saturating_add_signed(x);
         cursor_pos.y = cursor_pos.y.saturating_add_signed(y);
 
         self.set_cursor_pos(cursor_pos)
     }
 
-    pub fn set_cursor_pos(&mut self,cp: CursorPosition){
-        let pos = cp.y as u16 *BUFFER_WIDTH as u16 + cp.x as u16;
+    pub fn set_cursor_pos(&mut self, cp: CursorPosition) {
+        let pos = cp.y as u16 * BUFFER_WIDTH as u16 + cp.x as u16;
 
         let [high, low] = pos.to_be_bytes();
 
-        unsafe{
+        unsafe {
             let old_address = self.registers.crtc_address.read();
             self.registers.crtc_address.write(0x0E as u8);
             self.registers.crtc_data.write(high);
@@ -229,30 +217,11 @@ impl Writer {
             self.registers.crtc_data.write(low);
             self.registers.crtc_address.write(old_address);
         }
->>>>>>> 13438ad32109392c82e6864ec83d6dd4ed04e943
-    }
-
-    pub fn set_cursor_pos(&mut self, cp: CursorPosition) {
-        let pos = cp.y as u16 * BUFFER_WIDTH as u16 + cp.x as u16;
-
-        let [high, low] = pos.to_be_bytes();
-
-        self.registers.crtc_address.write(0x0E as u8);
-        self.registers.crtc_data.write(high);
-
-        self.registers.crtc_address.write(0x0F as u8);
-        self.registers.crtc_data.write(low);
     }
 
     /*
     /// Runs a closure while saving the old crtc addres
-<<<<<<< HEAD
     ///
-=======
-    /// 
-    /// # TODO ASK FOR HELP ON HOW TO FIX
-    /// 
->>>>>>> 13438ad32109392c82e6864ec83d6dd4ed04e943
     /// # Examples
     /// ```ignore
     /// while_saving_old_crtc_address(|| {
@@ -261,11 +230,7 @@ impl Writer {
     /// ```
     /// ## Safety
     /// The function is safe, as long as the vga card is not driven in color mode, in which case you have bigger problems.
-<<<<<<< HEAD
     fn while_saving_old_crtc_address<F, R>(&mut self, f: F) -> R
-=======
-    fn while_saving_old_address<F, R>(&mut self,f: F) -> R
->>>>>>> 13438ad32109392c82e6864ec83d6dd4ed04e943
     where
         F: FnOnce() -> R,
     {
@@ -275,11 +240,7 @@ impl Writer {
         }
 
         let ret = f();
-<<<<<<< HEAD
         unsafe {
-=======
-        unsafe{
->>>>>>> 13438ad32109392c82e6864ec83d6dd4ed04e943
             self.registers.crtc_address.write(_old_address);
         }
         ret
@@ -290,9 +251,6 @@ impl Writer {
         unsafe {
             let old_address = self.registers.crtc_address.read();
 
-<<<<<<< HEAD
-            let cp = CursorPosition {
-=======
             //uses math to get the cursor position
 
             //gets the first and last 8 bits of the cursor position by reading them from the vga cards crtc addresses
@@ -305,31 +263,18 @@ impl Writer {
             let cursor_distance = ((first_bits as u16) << 8) | last_bits as u16;
 
             //performs math to extract the x and y position
-            let cp = CursorPosition{
->>>>>>> 13438ad32109392c82e6864ec83d6dd4ed04e943
+            let cp = CursorPosition {
                 x: (|| -> u8 {
-                    (cursor_distance-((cursor_distance/80)*80)).try_into().unwrap()
+                    (cursor_distance - ((cursor_distance / 80) * 80))
+                        .try_into()
+                        .unwrap()
                 })(),
-                y: (|| -> u8 {
-<<<<<<< HEAD
-                    self.registers.crtc_address.write(0x0F as u8);
-                    self.registers.crtc_data.read()
-                })(),
-=======
-                    (cursor_distance/80).try_into().unwrap()
-                })()
->>>>>>> 13438ad32109392c82e6864ec83d6dd4ed04e943
+                y: (|| -> u8 { (cursor_distance / 80).try_into().unwrap() })(),
             };
 
-
             self.registers.crtc_address.write(old_address);
-<<<<<<< HEAD
         }
-        CursorPosition { x: 0, y: 0 }
-=======
-            cp
-        }
->>>>>>> 13438ad32109392c82e6864ec83d6dd4ed04e943
+        cp
     }
 
     fn new_line(&mut self) {

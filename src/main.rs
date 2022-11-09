@@ -51,7 +51,7 @@ pub extern "C" fn _start() -> ! {
 
     rost::pc_speaker::play_sound(1000);
 
-    panic!("testpanic");
+    //panic!("testpanic");
 
     rost::hlt_loop();
 }

@@ -1,7 +1,11 @@
-use volatile::Volatile;
-use spin::Mutex;
 use lazy_static::lazy_static;
-use x86_64::{instructions::port::{self, Port, ReadWriteAccess}, structures::port::PortWrite};
+use spin::Mutex;
+use volatile::Volatile;
+use x86_64::instructions::interrupts::without_interrupts;
+use x86_64::{
+    instructions::port::{self, Port, ReadWriteAccess},
+    structures::port::PortWrite,
+};
 
 #[macro_export]
 macro_rules! print {
@@ -19,29 +23,33 @@ pub fn _print(args: fmt::Arguments) {
     use core::fmt::Write;
     use x86_64::instructions::interrupts;
 
-    interrupts::without_interrupts(||  {
+    interrupts::without_interrupts(|| {
         WRITER.lock().write_fmt(args).unwrap();
     });
 }
 
 #[allow(unused)]
-pub fn colorchg(foreground_color: Color, background_color: Color){
+pub fn colorchg(foreground_color: Color, background_color: Color) {
     use x86_64::instructions::interrupts;
 
-    interrupts::without_interrupts(||{
-        WRITER.lock().change_color(foreground_color, background_color);
+    interrupts::without_interrupts(|| {
+        WRITER
+            .lock()
+            .change_color(foreground_color, background_color);
     });
 }
 
-pub fn change_screen_color(foreground_color: Color, background_color: Color){
+pub fn change_screen_color(foreground_color: Color, background_color: Color) {
     use x86_64::instructions::interrupts;
 
-    interrupts::without_interrupts(||{
-        WRITER.lock().change_screen_color(foreground_color, background_color);
+    interrupts::without_interrupts(|| {
+        WRITER
+            .lock()
+            .change_screen_color(foreground_color, background_color);
     });
 }
 
-pub struct CursorPosition{
+pub struct CursorPosition {
     x: u8,
     y: u8,
 }
@@ -71,11 +79,11 @@ pub enum Color {
 }
 
 lazy_static! {
-    pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer{
+    pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
         column_position: 0,
         color_code: ColorCode::new(Color::White, Color::Black),
         buffer: unsafe { &mut *(0xb8000 as *mut Buffer) },
-        registers: Registers{
+        registers: Registers {
             crtc_address: Port::new(0x3D4),
             crtc_data: Port::new(0x3D5)
         },
@@ -91,8 +99,6 @@ impl ColorCode {
         ColorCode((background as u8) << 4 | (foreground as u8))
     }
 }
-
-
 
 //A vga text mode character with a colour and character code
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -111,7 +117,7 @@ struct Buffer {
     chars: [[Volatile<ScreenChar>; BUFFER_WIDTH]; BUFFER_HEIGHT],
 }
 
-struct Registers{
+struct Registers {
     crtc_address: Port<u8>,
     crtc_data: Port<u8>,
 }
@@ -157,47 +163,49 @@ impl Writer {
                 // not part of printable ASCII range
                 _ => self.write_byte(0xfe),
             }
-
         }
     }
 
-    pub fn change_color(&mut self, foreground_color: Color, background_color: Color){
+    pub fn change_color(&mut self, foreground_color: Color, background_color: Color) {
         self.color_code = ColorCode::new(foreground_color, background_color);
     }
 
-    pub fn change_screen_color(&mut self, foreground_color: Color, background_color: Color){   
+    pub fn change_screen_color(&mut self, foreground_color: Color, background_color: Color) {
         self.change_color(foreground_color, background_color);
 
         for row in 0..BUFFER_HEIGHT {
             for col in 0..BUFFER_WIDTH {
                 let char = self.buffer.chars[row][col].read();
-                self.buffer.chars[row][col].write(
-                ScreenChar { 
+                self.buffer.chars[row][col].write(ScreenChar {
                     ascii_character: char.ascii_character,
-                    color_code: ColorCode::new(foreground_color, background_color) 
+                    color_code: ColorCode::new(foreground_color, background_color),
                 })
             }
         }
     }
 
-    pub fn set_cursor_pos(&mut self,cp: CursorPosition){
-        let pos = cp.y as u16 *BUFFER_WIDTH as u16 + cp.x as u16;
-
-        let [high, low] = pos.to_be_bytes();
-
-        self.while_saving_old_crtc_address(||{
-            unsafe{
-                self.registers.crtc_address.write(0x0E as u8);
-                self.registers.crtc_data.write(high);
-    
-                self.registers.crtc_address.write(0x0F as u8);
-                self.registers.crtc_data.write(low);
-            }
+    fn write_stuff(&mut self, address: u8, value: u8) {
+        without_interrupts(move || unsafe {
+            self.registers.crtc_address.write(address);
+            self.registers.crtc_data.write(value);
         });
     }
 
+    pub fn set_cursor_pos(&mut self, cp: CursorPosition) {
+        let pos = cp.y as u16 * BUFFER_WIDTH as u16 + cp.x as u16;
+
+        let [high, low] = pos.to_be_bytes();
+
+        self.registers.crtc_address.write(0x0E as u8);
+        self.registers.crtc_data.write(high);
+
+        self.registers.crtc_address.write(0x0F as u8);
+        self.registers.crtc_data.write(low);
+    }
+
+    /*
     /// Runs a closure while saving the old crtc addres
-    /// 
+    ///
     /// # Examples
     /// ```ignore
     /// while_saving_old_crtc_address(|| {
@@ -206,27 +214,28 @@ impl Writer {
     /// ```
     /// ## Safety
     /// The function is safe, as long as the vga card is not driven in color mode, in which case you have bigger problems.
-    fn while_saving_old_crtc_address<F, R>(&mut self,f: F) -> R
+    fn while_saving_old_crtc_address<F, R>(&mut self, f: F) -> R
     where
         F: FnOnce() -> R,
     {
         let _old_address: u8;
-        unsafe{
+        unsafe {
             _old_address = self.registers.crtc_address.read();
         }
 
         let ret = f();
-        /*unsafe{
+        unsafe {
             self.registers.crtc_address.write(_old_address);
-        }*/
+        }
         ret
     }
+    */
 
-    pub fn get_cursor_position(&mut self) -> CursorPosition{
-        unsafe{
+    pub fn get_cursor_position(&mut self) -> CursorPosition {
+        unsafe {
             let old_address = self.registers.crtc_address.read();
 
-            let cp = CursorPosition{
+            let cp = CursorPosition {
                 x: (|| -> u8 {
                     self.registers.crtc_address.write(0x0E as u8);
                     self.registers.crtc_data.read()
@@ -234,14 +243,11 @@ impl Writer {
                 y: (|| -> u8 {
                     self.registers.crtc_address.write(0x0F as u8);
                     self.registers.crtc_data.read()
-                })()
+                })(),
             };
             self.registers.crtc_address.write(old_address);
         }
-        CursorPosition {
-            x: 0,
-            y: 0
-        }
+        CursorPosition { x: 0, y: 0 }
     }
 
     fn new_line(&mut self) {
@@ -308,7 +314,7 @@ fn test_color_change() {
     use core::fmt::Write;
     use x86_64::instructions::interrupts;
     let s = "Some test string that fits on a single line";
-    
+
     colorchg(Color::White, Color::Black);
     colorchg(Color::Green, Color::Blue);
 
@@ -319,7 +325,10 @@ fn test_color_change() {
         for (i, c) in s.chars().enumerate() {
             let screen_char = writer.buffer.chars[BUFFER_HEIGHT - 2][i].read();
             assert_eq!(char::from(screen_char.ascii_character), c);
-            assert_eq!(screen_char.color_code, ColorCode::new(Color::Green, Color::Blue))
+            assert_eq!(
+                screen_char.color_code,
+                ColorCode::new(Color::Green, Color::Blue)
+            )
         }
     });
 }

@@ -1,4 +1,4 @@
-use x86_64::instructions::port::{Port, PortGeneric};
+use x86_64::instructions::port::{Port};
 
 pub fn play_sound(freq: u32){
     let div: u32 = 1193180 / freq;

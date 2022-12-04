@@ -15,6 +15,7 @@ pub mod vga_driver;
 pub mod interrupts;
 pub mod gdt;
 pub mod pc_speaker;
+pub mod io;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
@@ -66,6 +67,7 @@ pub fn colorchg(foreground_color: Color, background_color: Color){
     vga_driver::colorchg(foreground_color, background_color)
 }
 
+//Does initialization stuff
 pub fn init() {
     gdt::init();
     interrupts::init_idt();

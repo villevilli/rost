@@ -1,11 +1,11 @@
+pub mod code_page_737_definitions;
+
+use code_page_737_definitions::Symbols;
 use lazy_static::lazy_static;
 use spin::Mutex;
 use volatile::Volatile;
 use x86_64::instructions::interrupts::without_interrupts;
-use x86_64::{
-    instructions::port::{self, Port, ReadWriteAccess},
-    structures::port::PortWrite,
-};
+use x86_64::instructions::port::Port;
 
 #[macro_export]
 macro_rules! print {
@@ -58,6 +58,9 @@ pub struct CursorPosition {
     x: u8,
     y: u8,
 }
+
+#[derive(Default)]
+pub struct Point(pub usize, pub usize);
 
 //the interface for the vga text mode text buffer
 // 4 bit color table (using u8 since no u4 exsists)
@@ -139,6 +142,30 @@ pub struct Writer {
 //let mut crtc_data_register = Port::new(0x3D5);
 
 impl Writer {
+    // First we have the "fAncY" graphics shite
+    pub fn draw_symbol(&mut self, symbol: Symbols, point: Point) {
+        self.buffer.chars[point.0][point.1].write(ScreenChar {
+            ascii_character: symbol as u8,
+            color_code: self.color_code,
+        })
+    }
+
+    ///Iterates over the whole screen buffer and changes the color of each symbol
+    pub fn change_screen_color(&mut self, foreground_color: Color, background_color: Color) {
+        self.change_color(foreground_color, background_color);
+
+        for row in 0..BUFFER_HEIGHT {
+            for col in 0..BUFFER_WIDTH {
+                let char = self.buffer.chars[row][col].read();
+                self.buffer.chars[row][col].write(ScreenChar {
+                    ascii_character: char.ascii_character,
+                    color_code: ColorCode::new(foreground_color, background_color),
+                })
+            }
+        }
+    }
+
+    // The handler for writing text
     pub fn write_byte(&mut self, byte: u8) {
         match byte {
             b'\n' => self.new_line(),
@@ -172,24 +199,9 @@ impl Writer {
         }
     }
 
-    ///Changes the color currently writen by the writer
+    ///Changes the color of text currently printed by the writer
     pub fn change_color(&mut self, foreground_color: Color, background_color: Color) {
         self.color_code = ColorCode::new(foreground_color, background_color);
-    }
-
-    ///Iterates over the whole screen buffer and changes the color of each symbol
-    pub fn change_screen_color(&mut self, foreground_color: Color, background_color: Color) {
-        self.change_color(foreground_color, background_color);
-
-        for row in 0..BUFFER_HEIGHT {
-            for col in 0..BUFFER_WIDTH {
-                let char = self.buffer.chars[row][col].read();
-                self.buffer.chars[row][col].write(ScreenChar {
-                    ascii_character: char.ascii_character,
-                    color_code: ColorCode::new(foreground_color, background_color),
-                })
-            }
-        }
     }
 
     ///Writes to a specified crtc data bus
@@ -217,7 +229,7 @@ impl Writer {
         //});
 
         let mut new_x: i16 = (cursor_pos.x as i8 + x).into();
-        let mut new_y: i16 = (cursor_pos.y as i8 + y).into();
+        let new_y: i16 = (cursor_pos.y as i8 + y).into();
 
         //without_interrupts(|| {
         //println!("new_x: {} new_y: {}", new_x, new_y);

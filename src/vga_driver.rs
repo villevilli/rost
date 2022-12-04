@@ -53,6 +53,7 @@ pub fn move_cursor_by(x: i8, y: i8) {
     WRITER.lock().move_cursor_by(x, y)
 }
 
+#[derive(Debug)]
 pub struct CursorPosition {
     x: u8,
     y: u8,
@@ -159,6 +160,7 @@ impl Writer {
         }
     }
 
+    ///Writes a string to the bottom of the screen
     pub fn write_string(&mut self, s: &str) {
         for byte in s.bytes() {
             match byte {
@@ -170,10 +172,12 @@ impl Writer {
         }
     }
 
+    ///Changes the color currently writen by the writer
     pub fn change_color(&mut self, foreground_color: Color, background_color: Color) {
         self.color_code = ColorCode::new(foreground_color, background_color);
     }
 
+    ///Iterates over the whole screen buffer and changes the color of each symbol
     pub fn change_screen_color(&mut self, foreground_color: Color, background_color: Color) {
         self.change_color(foreground_color, background_color);
 
@@ -188,6 +192,7 @@ impl Writer {
         }
     }
 
+    ///Writes to a specified crtc data bus
     fn crtc_write(&mut self, address: u8, value: u8) {
         without_interrupts(move || unsafe {
             self.registers.crtc_address.write(address);
@@ -195,86 +200,69 @@ impl Writer {
         });
     }
 
+    ///Reads a specified crtc data bus and returns the value
+    fn crtc_read(&mut self, address: u8) -> u8 {
+        without_interrupts(move || unsafe {
+            self.registers.crtc_address.write(address);
+            self.registers.crtc_data.read()
+        })
+    }
+
+    ///Moves the cursor x and y and wraps the cursor around if it goes over the side
     pub fn move_cursor_by(&mut self, x: i8, y: i8) {
         let mut cursor_pos = self.get_cursor_position();
-        cursor_pos.x = cursor_pos.x.saturating_add_signed(x);
-        cursor_pos.y = cursor_pos.y.saturating_add_signed(y);
+
+        //without_interrupts(|| {
+        //println!("{:#?}", cursor_pos);
+        //});
+
+        let mut new_x: i16 = (cursor_pos.x as i8 + x).into();
+        let mut new_y: i16 = (cursor_pos.y as i8 + y).into();
+
+        //without_interrupts(|| {
+        //println!("new_x: {} new_y: {}", new_x, new_y);
+        //});
+        //BUFFER_WIDTH as i16 - new_x
+        if new_x < 0 {
+            new_x = BUFFER_WIDTH as i16 + new_x;
+        } else if new_x > BUFFER_WIDTH as i16 + 1 {
+            new_x = new_x + BUFFER_WIDTH as i16;
+        }
+
+        cursor_pos.x = new_x as u8;
+        cursor_pos.y = new_y as u8;
 
         self.set_cursor_pos(cursor_pos)
     }
 
+    ///Takes a Cursorposition and sets it as the current cursorposition
     pub fn set_cursor_pos(&mut self, cp: CursorPosition) {
         let pos = cp.y as u16 * BUFFER_WIDTH as u16 + cp.x as u16;
 
         let [high, low] = pos.to_be_bytes();
 
-        unsafe {
-            let old_address = self.registers.crtc_address.read();
-            self.registers.crtc_address.write(0x0E as u8);
-            self.registers.crtc_data.write(high);
-
-            self.registers.crtc_address.write(0x0F as u8);
-            self.registers.crtc_data.write(low);
-            self.registers.crtc_address.write(old_address);
-        }
+        self.crtc_write(0x0E, high);
+        self.crtc_write(0x0F, low);
     }
 
-    /*
-    /// Runs a closure while saving the old crtc addres
-    ///
-    /// # Examples
-    /// ```ignore
-    /// while_saving_old_crtc_address(|| {
-    ///     //do thing here
-    /// })
-    /// ```
-    /// ## Safety
-    /// The function is safe, as long as the vga card is not driven in color mode, in which case you have bigger problems.
-    fn while_saving_old_crtc_address<F, R>(&mut self, f: F) -> R
-    where
-        F: FnOnce() -> R,
-    {
-        let _old_address: u8;
-        unsafe {
-            _old_address = self.registers.crtc_address.read();
-        }
-
-        let ret = f();
-        unsafe {
-            self.registers.crtc_address.write(_old_address);
-        }
-        ret
-    }
-    */
-
+    ///Gets the current curor position and returns a CursorPosition
     pub fn get_cursor_position(&mut self) -> CursorPosition {
-        unsafe {
-            let old_address = self.registers.crtc_address.read();
+        //gets the first and last 8 bits of the cursor position by reading them from the vga cards crtc addresses
+        let first_bits = self.crtc_read(0x0E);
+        let last_bits = self.crtc_read(0x0F);
 
-            //uses math to get the cursor position
+        // connects the first and last bits into an u16
+        let cursor_distance = ((first_bits as u16) << 8) | last_bits as u16;
 
-            //gets the first and last 8 bits of the cursor position by reading them from the vga cards crtc addresses
-            self.registers.crtc_address.write(0x0E as u8);
-            let first_bits = self.registers.crtc_data.read();
-            self.registers.crtc_address.write(0x0F as u8);
-            let last_bits = self.registers.crtc_data.read();
-
-            // connects the first and last bits into an u16
-            let cursor_distance = ((first_bits as u16) << 8) | last_bits as u16;
-
-            //performs math to extract the x and y position
-            let cp = CursorPosition {
-                x: (|| -> u8 {
-                    (cursor_distance - ((cursor_distance / 80) * 80))
-                        .try_into()
-                        .unwrap()
-                })(),
-                y: (|| -> u8 { (cursor_distance / 80).try_into().unwrap() })(),
-            };
-
-            self.registers.crtc_address.write(old_address);
+        //performs math to extract the x and y position
+        CursorPosition {
+            x: (|| -> u8 {
+                (cursor_distance - ((cursor_distance / 80) * 80))
+                    .try_into()
+                    .unwrap()
+            })(),
+            y: (|| -> u8 { (cursor_distance / 80).try_into().unwrap() })(),
         }
-        cp
     }
 
     fn new_line(&mut self) {
